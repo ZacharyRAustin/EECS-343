@@ -93,6 +93,9 @@ void RunCmd(commandT** cmd, int n)
 {
   int i;
   total_task = n;
+  fprintf(stdout, "Name: %s\n", cmd[0]->name);
+  fprintf(stdout, "cmdLine: %s\n", cmd[0]->cmdline);
+  
   if(n == 1)
     RunCmdFork(cmd[0], TRUE);
   else{
@@ -195,20 +198,32 @@ static bool ResolveExternalCmd(commandT* cmd)
 
 static void Exec(commandT* cmd, bool forceFork)
 {
+  if(forceFork)
+  {
+    fprintf(stdout, "Force a fork is true\n");
+  }
+  fprintf(stdout, "In exec running: %s\n", cmd->cmdline);
+  execv(cmd->name, cmd->argv);
+  fprintf(stdout, "Hope this works?\n");
 }
 
 static bool IsBuiltIn(char* cmd)
 {
-  return FALSE;     
+  //Print out to let us know where we are
+  fprintf(stdout, "Is built in %s\n", cmd);
+  //check for built in commands fg, bg, or jobs
+  return strcmp(cmd, "fg") || strcmp(cmd, "bg") || strcmp(cmd, "jobs");   
 }
 
 
 static void RunBuiltInCmd(commandT* cmd)
 {
+  fprintf(stdout, "Running built in command: %s\n", cmd->cmdline);
 }
 
 void CheckJobs()
 {
+  fprintf(stdout, "checking jobs\n");
 }
 
 
