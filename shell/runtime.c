@@ -328,11 +328,17 @@ static void RunBuiltInCmd(commandT* cmd)
     int i = 1;
     if(jobPointer != NULL)
     {
+      printf("[%d] pid = %d, fix later to match test case.\n", i, jobPointer->pid);
+      i++;
       while(jobPointer->next != NULL){
         printf("[%d] pid = %d, fix later to match test case.\n", i, jobPointer->pid);
         i++;
         jobPointer = jobPointer->next;
       }
+    }
+    else
+    {
+      fprintf(stdout, "jobPointer is null\n");
     }
   }
   // Execute fg
@@ -389,7 +395,7 @@ void ReleaseCmdT(commandT **cmd){
 
 /*Adds a job to the background jobs list*/
 void AddJobToBg(pid_t pid){
-  fprintf(stdout, "Adding pid %d to bgjobs", pid);
+  fprintf(stdout, "\nAdding pid %d to background jobs\n", pid);
   //make variables
   bgjobL* last = bgjobs;
   bgjobL* toAdd = (bgjobL*) malloc(sizeof(bgjobL));
@@ -402,7 +408,7 @@ void AddJobToBg(pid_t pid){
   //if bgjobs is empty, set last to the job being added
   if(last == NULL)
   {
-    last = toAdd;
+    bgjobs = toAdd;
   }
   else
   {
@@ -414,5 +420,4 @@ void AddJobToBg(pid_t pid){
     //add the new job to the list
     last->next = toAdd;
   }
-  fprintf(stdout, "made it out");
 }
