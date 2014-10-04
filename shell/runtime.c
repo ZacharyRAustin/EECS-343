@@ -280,8 +280,7 @@ static bool IsBuiltIn(char* cmd)
 
 
 static void RunBuiltInCmd(commandT* cmd)
-{
-  printf("in RunBuiltInCmd\n");
+{ 
   // Execute cd
   if(!strcmp(cmd->argv[0],"cd")){
     if(cmd->argc==1){
@@ -308,42 +307,51 @@ static void RunBuiltInCmd(commandT* cmd)
   // Execute bg
   else if (!strcmp(cmd->argv[0], "bg")){
     struct bgjob_l* jobPointer = bgjobs;
-    if(cmd->argc < 2) // find most recent job
-      while(jobPointer->next != NULL)
-        jobPointer = jobPointer->next;
-    else{
-      int i;  // find indicated job
-      printf("cmd-> argv[1] = %s\n", cmd->argv[1]);
-      printf("(int)*cmd->argv[1] = %d\n", (int)*cmd->argv[1]);
-      for(i = 1; i < (int)*cmd->argv[1]; i++)
-        jobPointer = jobPointer->next;
+    if(jobPointer != NULL)
+    {
+      if(cmd->argc < 2) // find most recent job
+        while(jobPointer->next != NULL)
+          jobPointer = jobPointer->next;
+      else{
+        int i;  // find indicated job
+        printf("cmd-> argv[1] = %s\n", cmd->argv[1]);
+        printf("(int)*cmd->argv[1] = %d\n", (int)*cmd->argv[1]);
+        for(i = 1; i < (int)*cmd->argv[1]; i++)
+          jobPointer = jobPointer->next;
+      }
+      kill(jobPointer->pid, SIGCONT); // resume job
     }
-    kill(jobPointer->pid, SIGCONT); // resume job
   }
   // Execute jobs
   else if (!strcmp(cmd->argv[0], "jobs")){
     struct bgjob_l* jobPointer = bgjobs;
     int i = 1;
-    while(jobPointer->next != NULL){
-      printf("[%d] pid = %d, fix later to match test case.\n", i, jobPointer->pid);
-      i++;
-      jobPointer = jobPointer->next;
+    if(jobPointer != NULL)
+    {
+      while(jobPointer->next != NULL){
+        printf("[%d] pid = %d, fix later to match test case.\n", i, jobPointer->pid);
+        i++;
+        jobPointer = jobPointer->next;
+      }
     }
   }
   // Execute fg
   else if (!strcmp(cmd->argv[0], "fg")){
     struct bgjob_l* jobPointer = bgjobs;
     // tcsetpgrp()???
-    if(cmd->argc < 2) // find most recent job
-      while(jobPointer->next != NULL)
-        jobPointer = jobPointer->next;
-    else{ // find indicated job
-      int i;
-      for(i = 1; i < (int)*cmd->argv[1]; i++)
-        jobPointer = jobPointer->next;
+    if(jobPointer != NULL)
+    {
+      if(cmd->argc < 2) // find most recent job
+        while(jobPointer->next != NULL)
+          jobPointer = jobPointer->next;
+      else{ // find indicated job
+        int i;
+        for(i = 1; i < (int)*cmd->argv[1]; i++)
+          jobPointer = jobPointer->next;
+      }
+      // How to bring it to foreground??
+      kill(jobPointer->pid, SIGCONT); // resume job
     }
-    // How to bring it to foreground??
-    kill(jobPointer->pid, SIGCONT); // resume job
   } 
 }
 
@@ -381,6 +389,7 @@ void ReleaseCmdT(commandT **cmd){
 
 /*Adds a job to the background jobs list*/
 void AddJobToBg(pid_t pid){
+  fprintf(stdout, "Adding pid %d to bgjobs", pid);
   //make variables
   bgjobL* last = bgjobs;
   bgjobL* toAdd = (bgjobL*) malloc(sizeof(bgjobL));
@@ -405,4 +414,5 @@ void AddJobToBg(pid_t pid){
     //add the new job to the list
     last->next = toAdd;
   }
+  fprintf(stdout, "made it out");
 }

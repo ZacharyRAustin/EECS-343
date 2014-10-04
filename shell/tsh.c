@@ -82,10 +82,6 @@ int main (int argc, char *argv[])
       forceExit=TRUE;
       continue;
     }
-    else
-    {
-      fprintf(stdout, cmdLine);
-    }
 
     /* checks the status of background jobs */
     CheckJobs();
