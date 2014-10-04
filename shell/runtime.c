@@ -210,9 +210,11 @@ static void Exec(commandT* cmd, bool forceFork)
 static bool IsBuiltIn(char* cmd)
 {
   //Print out to let us know where we are
-  fprintf(stdout, "Is built in %s\n", cmd);
+  fprintf(stdout, "In IsBuiltIn with command %s\n", cmd);
   //check for built in commands fg, bg, or jobs
-  return strcmp(cmd, "fg") || strcmp(cmd, "bg") || strcmp(cmd, "jobs");   
+  return strcmp(cmd, "fg") == 0 
+      || strcmp(cmd, "bg") == 0
+      || strcmp(cmd, "jobs") == 0;   
 }
 
 
