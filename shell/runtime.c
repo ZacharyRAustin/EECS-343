@@ -85,6 +85,8 @@ static void Exec(commandT*, bool);
 static void RunBuiltInCmd(commandT*);
 /* checks whether a command is a builtin command */
 static bool IsBuiltIn(char*);
+/* adds a new job to the background jobs*/
+static void AddJobToBg(pid_t); 
 /************External Declaration*****************************************/
 
 /**************Implementation***********************************************/
@@ -201,6 +203,16 @@ static void Exec(commandT* cmd, bool forceFork)
   pid_t child_pid;
   pid_t pid;
   int status;
+  sigset_t mask;
+
+  //empty out the masking set
+  sigemptyset(&mask);
+
+  //add child signal to the mask
+  sigaddset(&mask, SIGCHLD);
+
+  //block child signal
+  sigprocmask(SIG_BLOCK, &mask, NULL);
 
   //fork the process
   child_pid = fork();
@@ -208,6 +220,10 @@ static void Exec(commandT* cmd, bool forceFork)
   if(child_pid == 0)
   {
     //child process here
+
+    //put the child process in a new process group
+    //this group's id is the child's pid
+    setpgid(0, 0);
 
     //execute child process
     execv(cmd->name, cmd->argv);
@@ -219,10 +235,24 @@ static void Exec(commandT* cmd, bool forceFork)
   {
     //parent process here
 
-    //wait for child to finish
-    if((pid = wait(&status)) < 0)
+    if(cmd->bg)
     {
-      fprintf(stdout, "wait");
+      //add to bg jobs
+
+      //unblock child signals
+      sigprocmask(SIG_UNBLOCK, &mask, NULL);
+    }
+    else
+    {
+      
+      //unblock child signals
+      sigprocmask(SIG_UNBLOCK, &mask, NULL);
+      
+      //wait for child to finish
+      if((pid = wait(&status)) < 0)
+      {
+        fprintf(stdout, "wait");
+      }
     }
 
     //let us know that the parent passed
@@ -280,4 +310,32 @@ void ReleaseCmdT(commandT **cmd){
   for(i = 0; i < (*cmd)->argc; i++)
     if((*cmd)->argv[i] != NULL) free((*cmd)->argv[i]);
   free(*cmd);
+}
+
+/*Adds a job to the background jobs list*/
+void AddJobToBg(pid_t pid){
+  //make variables
+  bgjobL* last = bgjobs;
+  bgjobL* toAdd = (bgjobL*) malloc(sizeof(bgjobL));
+
+  //set next to null for the job to be added, since it is at the end of the list
+  toAdd->next = NULL;
+  //set the pid for the job to the appropriate pid
+  toAdd->pid = pid;
+
+  //if bgjobs is empty, set last to the job being added
+  if(last == NULL)
+  {
+    last = toAdd;
+  }
+  else
+  {
+    //find the last job -- the one whose next is null
+    while(last->next != NULL)
+    {
+      last = last->next;
+    }
+    //add the new job to the list
+    last->next = toAdd;
+  }
 }
