@@ -85,6 +85,8 @@ static void Exec(commandT*, bool);
 static void RunBuiltInCmd(commandT*);
 /* checks whether a command is a builtin command */
 static bool IsBuiltIn(char*);
+/* adds a new job to the background jobs*/
+static void AddJobToBg(pid_t); 
 /************External Declaration*****************************************/
 
 /**************Implementation***********************************************/
@@ -94,6 +96,9 @@ void RunCmd(commandT** cmd, int n)
   printf("in RunCmd\n");
   int i;
   total_task = n;
+  fprintf(stdout, "Name: %s\n", cmd[0]->name);
+  fprintf(stdout, "cmdLine: %s\n", cmd[0]->cmdline);
+  
   if(n == 1)
     RunCmdFork(cmd[0], TRUE);
   else{
@@ -198,34 +203,78 @@ static bool ResolveExternalCmd(commandT* cmd)
 
 static void Exec(commandT* cmd, bool forceFork)
 {
-  printf("in Exec. \n");
-  int pid;
-  if((pid=fork()) == 0)   // Child
-    execve(cmd->name, cmd->argv, genvp);
-  else {                  // Parent
-    if(!forceFork)        // Background
-      AddJob(pid);
-    else{                 // Foreground
-      int status;
-      waitpid(pid, &status, WUNTRACED | WNOHANG);
-      if(WIFEXITED(status) || WIFSIGNALED(status))
-        DeleteJob(pid);
+  pid_t child_pid;
+  pid_t pid;
+  int status;
+  sigset_t mask;
+
+  //empty out the masking set
+  sigemptyset(&mask);
+
+  //add child signal to the mask
+  sigaddset(&mask, SIGCHLD);
+
+  //block child signal
+  sigprocmask(SIG_BLOCK, &mask, NULL);
+
+  //fork the process
+  child_pid = fork();
+
+  if(child_pid == 0)
+  {
+    //child process here
+
+    //put the child process in a new process group
+    //this group's id is the child's pid
+    setpgid(0, 0);
+
+    //execute child process
+    execv(cmd->name, cmd->argv);
+
+    //this should only display if the execution fails
+    fprintf(stdout, "Error executing child command: %s\n", cmd->cmdline);
+  }
+  else if(child_pid > 0)
+  {
+    //parent process here
+
+    if(cmd->bg)
+    {
+      //add to bg jobs
+
+      //unblock child signals
+      sigprocmask(SIG_UNBLOCK, &mask, NULL);
     }
+    else
+    {
+      
+      //unblock child signals
+      sigprocmask(SIG_UNBLOCK, &mask, NULL);
+      
+      //wait for child to finish
+      if((pid = wait(&status)) < 0)
+      {
+        fprintf(stdout, "wait");
+      }
+    }
+
+    //let us know that the parent passed
+    fprintf(stdout, "Parent passed command: %s\n", cmd->cmdline);
+  }
+  else
+  {
+    fprintf(stdout, "Fork failed for command: %s\n", cmd->cmdline);
   }
 }
 
 static bool IsBuiltIn(char* cmd)
 {
-  int i;
-  //look for the command in our list of builtin commands
-  for (i=0;i<NBUILTINCOMMANDS;i++){
-    if(!strcmp(cmd,BuiltInCommands[i])) return TRUE;
-  }
-  //check to see if it's trying to assign env variables
-  if(strchr(cmd,'=')&&(!strchr(cmd,' '))){
-    return TRUE;
-  }
-  return FALSE;     
+  //Print out to let us know where we are
+  fprintf(stdout, "In IsBuiltIn with command %s\n", cmd);
+  //check for built in commands fg, bg, or jobs
+  return strcmp(cmd, "fg") == 0 
+      || strcmp(cmd, "bg") == 0
+      || strcmp(cmd, "jobs") == 0;   
 }
 
 
@@ -287,6 +336,7 @@ static void RunBuiltInCmd(commandT* cmd)
 
 void CheckJobs()
 {
+  fprintf(stdout, "checking jobs\n");
 }
 
 
@@ -314,4 +364,32 @@ void ReleaseCmdT(commandT **cmd){
   for(i = 0; i < (*cmd)->argc; i++)
     if((*cmd)->argv[i] != NULL) free((*cmd)->argv[i]);
   free(*cmd);
+}
+
+/*Adds a job to the background jobs list*/
+void AddJobToBg(pid_t pid){
+  //make variables
+  bgjobL* last = bgjobs;
+  bgjobL* toAdd = (bgjobL*) malloc(sizeof(bgjobL));
+
+  //set next to null for the job to be added, since it is at the end of the list
+  toAdd->next = NULL;
+  //set the pid for the job to the appropriate pid
+  toAdd->pid = pid;
+
+  //if bgjobs is empty, set last to the job being added
+  if(last == NULL)
+  {
+    last = toAdd;
+  }
+  else
+  {
+    //find the last job -- the one whose next is null
+    while(last->next != NULL)
+    {
+      last = last->next;
+    }
+    //add the new job to the list
+    last->next = toAdd;
+  }
 }
