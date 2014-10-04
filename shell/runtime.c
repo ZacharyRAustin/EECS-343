@@ -198,13 +198,40 @@ static bool ResolveExternalCmd(commandT* cmd)
 
 static void Exec(commandT* cmd, bool forceFork)
 {
-  if(forceFork)
+  pid_t child_pid;
+  pid_t pid;
+  int status;
+
+  //fork the process
+  child_pid = fork();
+
+  if(child_pid == 0)
   {
-    fprintf(stdout, "Force a fork is true\n");
+    //child process here
+
+    //execute child process
+    execv(cmd->name, cmd->argv);
+
+    //this should only display if the execution fails
+    fprintf(stdout, "Error executing child command: %s\n", cmd->cmdline);
   }
-  fprintf(stdout, "In exec running: %s\n", cmd->cmdline);
-  execv(cmd->name, cmd->argv);
-  fprintf(stdout, "Hope this works?\n");
+  else if(child_pid > 0)
+  {
+    //parent process here
+
+    //wait for child to finish
+    if((pid = wait(&status)) < 0)
+    {
+      fprintf(stdout, "wait");
+    }
+
+    //let us know that the parent passed
+    fprintf(stdout, "Parent passed command: %s\n", cmd->cmdline);
+  }
+  else
+  {
+    fprintf(stdout, "Fork failed for command: %s\n", cmd->cmdline);
+  }
 }
 
 static bool IsBuiltIn(char* cmd)
