@@ -67,6 +67,7 @@
 typedef struct bgjob_l {
   pid_t pid;
   struct bgjob_l* next;
+  struct bgjob_l* prev;
 } bgjobL;
 
 /* the pids of the background processes */
@@ -250,7 +251,7 @@ static void Exec(commandT* cmd, bool forceFork)
       
       //unblock child signals
       sigprocmask(SIG_UNBLOCK, &mask, NULL);
-      
+
       //wait for child to finish
       if((pid = wait(&status)) < 0)
       {
@@ -362,7 +363,47 @@ static void RunBuiltInCmd(commandT* cmd)
 
 void CheckJobs()
 {
-  // fprintf(stdout, "checking jobs\n");
+  bgjobL* jobs = bgjobs;
+  pid_t endid;
+  int status;
+
+  while(jobs != NULL)
+  {
+    //get the endid for the current job
+    endid = waitpid(jobs->pid, &status, WNOHANG|WUNTRACED);
+
+    //if 0, the process is still running
+    if(endid == 0)
+    {
+      fprintf(stdout, "PID %d still running\n", jobs->pid);
+    }
+    //if it is equal to the job pid, then it has exited
+    else if(endid == jobs->pid)
+    {
+      //check if it exited normally
+      if(WIFEXITED(status))
+      {
+        fprintf(stdout, "PID %d exited normally\n", jobs->pid);
+      }
+      //check if there was an uncaught signal
+      else if(WIFSIGNALED(status))
+      {
+        fprintf(stdout, "PID %d ended because of an uncaught signal\n", jobs->pid);
+      }
+      //check if the process was stopped
+      else if(WIFSTOPPED(status))
+      {
+        fprintf(stdout, "PID %d has stopped\n", jobs->pid);
+      }
+    }
+    else if(endid == -1)
+    {
+      fprintf(stdout, "Error calling waitpid for job pid %d\n", jobs->pid);
+    }
+
+    jobs = jobs->next; 
+  }
+  
 }
 
 
@@ -403,6 +444,8 @@ void AddJobToBg(pid_t pid){
   toAdd->next = NULL;
   //set the pid for the job to the appropriate pid
   toAdd->pid = pid;
+  //set previous to null, will be replaced later if needed
+  toAdd->prev = NULL;
 
   //if bgjobs is empty, set last to the job being added
   if(last == NULL)
@@ -418,5 +461,6 @@ void AddJobToBg(pid_t pid){
     }
     //add the new job to the list
     last->next = toAdd;
+    toAdd->prev = last;
   }
 }
