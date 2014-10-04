@@ -91,6 +91,7 @@ static bool IsBuiltIn(char*);
 int total_task;
 void RunCmd(commandT** cmd, int n)
 {
+  printf("in RunCmd\n");
   int i;
   total_task = n;
   if(n == 1)
@@ -104,6 +105,7 @@ void RunCmd(commandT** cmd, int n)
 
 void RunCmdFork(commandT* cmd, bool fork)
 {
+  printf("in runcmdfork\n");
   if (cmd->argc<=0)
     return;
   if (IsBuiltIn(cmd->argv[0]))
@@ -118,7 +120,8 @@ void RunCmdFork(commandT* cmd, bool fork)
 
 void RunCmdBg(commandT* cmd)
 {
-  // TODO
+  printf("in RunCmdBg\n");
+  RunCmdFork(cmd, FALSE);// TODO
 }
 
 void RunCmdPipe(commandT* cmd1, commandT* cmd2)
@@ -195,16 +198,91 @@ static bool ResolveExternalCmd(commandT* cmd)
 
 static void Exec(commandT* cmd, bool forceFork)
 {
+  printf("in Exec. \n");
+  int pid;
+  if((pid=fork()) == 0)   // Child
+    execve(cmd->name, cmd->argv, genvp);
+  else {                  // Parent
+    if(!forceFork)        // Background
+      AddJob(pid);
+    else{                 // Foreground
+      int status;
+      waitpid(pid, &status, WUNTRACED | WNOHANG);
+      if(WIFEXITED(status) || WIFSIGNALED(status))
+        DeleteJob(pid);
+    }
+  }
 }
 
 static bool IsBuiltIn(char* cmd)
 {
+  int i;
+  //look for the command in our list of builtin commands
+  for (i=0;i<NBUILTINCOMMANDS;i++){
+    if(!strcmp(cmd,BuiltInCommands[i])) return TRUE;
+  }
+  //check to see if it's trying to assign env variables
+  if(strchr(cmd,'=')&&(!strchr(cmd,' '))){
+    return TRUE;
+  }
   return FALSE;     
 }
 
 
 static void RunBuiltInCmd(commandT* cmd)
 {
+  printf("in RunBuiltInCmd\n");
+  // Execute cd
+  if(!strcmp(cmd->argv[0],"cd")){
+    if(cmd->argc==1) chdir(getenv("HOME"));
+    else chdir(cmd->argv[1]);
+  }
+  // Execute env variable assignments
+  else if (strchr(cmd->argv[0],'=')) {
+    char* var = strtok(cmd->argv[0],"=");
+    char* val = strtok(NULL,"=");
+    setenv(var,val,1);
+  }
+  // Execute bg
+  else if (!strcmp(cmd->argv[0], "bg")){
+    struct bgjob_l* jobPointer = bgjobs;
+    if(cmd->argc < 2) // find most recent job
+      while(jobPointer->next != NULL)
+        jobPointer = jobPointer->next;
+    else{
+      int i;  // find indicated job
+      printf("cmd-> argv[1] = %s\n", cmd->argv[1]);
+      printf("(int)*cmd->argv[1] = %d\n", (int)*cmd->argv[1]);
+      for(i = 1; i < (int)*cmd->argv[1]; i++)
+        jobPointer = jobPointer->next;
+    }
+    kill(jobPointer->pid, SIGCONT); // resume job
+  }
+  // Execute jobs
+  else if (!strcmp(cmd->argv[0], "jobs")){
+    struct bgjob_l* jobPointer = bgjobs;
+    int i = 1;
+    while(jobPointer->next != NULL){
+      printf("[%d] pid = %d, fix later to match test case.\n", i, jobPointer->pid);
+      i++;
+      jobPointer = jobPointer->next;
+    }
+  }
+  // Execute fg
+  else if (!strcmp(cmd->argv[0], "fg")){
+    struct bgjob_l* jobPointer = bgjobs;
+    // tcsetpgrp()???
+    if(cmd->argc < 2) // find most recent job
+      while(jobPointer->next != NULL)
+        jobPointer = jobPointer->next;
+    else{ // find indicated job
+      int i;
+      for(i = 1; i < (int)*cmd->argv[1]; i++)
+        jobPointer = jobPointer->next;
+    }
+    // How to bring it to foreground??
+    kill(jobPointer->pid, SIGCONT); // resume job
+  } 
 }
 
 void CheckJobs()
