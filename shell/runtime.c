@@ -328,9 +328,8 @@ static void RunBuiltInCmd(commandT* cmd)
     int i = 1;
     if(jobPointer != NULL)
     {
-      printf("[%d] pid = %d, fix later to match test case.\n", i, jobPointer->pid);
-      i++;
-      while(jobPointer->next != NULL){
+      while(jobPointer != NULL)
+      {
         printf("[%d] pid = %d, fix later to match test case.\n", i, jobPointer->pid);
         i++;
         jobPointer = jobPointer->next;
