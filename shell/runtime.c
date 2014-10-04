@@ -93,11 +93,11 @@ static void AddJobToBg(pid_t);
 int total_task;
 void RunCmd(commandT** cmd, int n)
 {
-  printf("in RunCmd\n");
+  // printf("in RunCmd\n");
   int i;
   total_task = n;
-  fprintf(stdout, "Name: %s\n", cmd[0]->name);
-  fprintf(stdout, "cmdLine: %s\n", cmd[0]->cmdline);
+  // fprintf(stdout, "Name: %s\n", cmd[0]->name);
+  // fprintf(stdout, "cmdLine: %s\n", cmd[0]->cmdline);
   
   if(n == 1)
     RunCmdFork(cmd[0], TRUE);
@@ -110,7 +110,7 @@ void RunCmd(commandT** cmd, int n)
 
 void RunCmdFork(commandT* cmd, bool fork)
 {
-  printf("in runcmdfork\n");
+  // printf("in runcmdfork\n");
   if (cmd->argc<=0)
     return;
   if (IsBuiltIn(cmd->argv[0]))
@@ -125,7 +125,7 @@ void RunCmdFork(commandT* cmd, bool fork)
 
 void RunCmdBg(commandT* cmd)
 {
-  printf("in RunCmdBg\n");
+  // printf("in RunCmdBg\n");
   RunCmdFork(cmd, FALSE);// TODO
 }
 
@@ -241,7 +241,7 @@ static void Exec(commandT* cmd, bool forceFork)
     if(cmd->bg)
     {
       //add to bg jobs
-
+      AddJobToBg(child_pid);
       //unblock child signals
       sigprocmask(SIG_UNBLOCK, &mask, NULL);
     }
@@ -259,7 +259,7 @@ static void Exec(commandT* cmd, bool forceFork)
     }
 
     //let us know that the parent passed
-    fprintf(stdout, "Parent passed command: %s\n", cmd->cmdline);
+    // fprintf(stdout, "Parent passed command: %s\n", cmd->cmdline);
   }
   else
   {
@@ -270,11 +270,12 @@ static void Exec(commandT* cmd, bool forceFork)
 static bool IsBuiltIn(char* cmd)
 {
   //Print out to let us know where we are
-  fprintf(stdout, "In IsBuiltIn with command %s\n", cmd);
+  // fprintf(stdout, "In IsBuiltIn with command %s\n", cmd);
   //check for built in commands fg, bg, or jobs
   return strcmp(cmd, "fg") == 0 
       || strcmp(cmd, "bg") == 0
-      || strcmp(cmd, "jobs") == 0;   
+      || strcmp(cmd, "jobs") == 0
+      || strcmp(cmd, "cd") == 0;   
 }
 
 
@@ -283,8 +284,20 @@ static void RunBuiltInCmd(commandT* cmd)
   printf("in RunBuiltInCmd\n");
   // Execute cd
   if(!strcmp(cmd->argv[0],"cd")){
-    if(cmd->argc==1) chdir(getenv("HOME"));
-    else chdir(cmd->argv[1]);
+    if(cmd->argc==1){
+      int ret = chdir(getenv("HOME"));
+      if(ret == -1)
+      {
+        fprintf(stdout, "Error changing directory with command: %s\n", cmd->cmdline);
+      }
+    } 
+    else{
+     int ret = chdir(cmd->argv[1]);
+     if(ret == -1)
+     {
+      fprintf(stdout, "Error changing directory with command: %s\n", cmd->cmdline);
+     }
+    } 
   }
   // Execute env variable assignments
   else if (strchr(cmd->argv[0],'=')) {
@@ -336,7 +349,7 @@ static void RunBuiltInCmd(commandT* cmd)
 
 void CheckJobs()
 {
-  fprintf(stdout, "checking jobs\n");
+  // fprintf(stdout, "checking jobs\n");
 }
 
 
