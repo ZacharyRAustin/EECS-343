@@ -68,6 +68,7 @@ typedef struct bgjob_l {
   pid_t pid;
   struct bgjob_l* next;
   struct bgjob_l* prev;
+  char* status;
 } bgjobL;
 
 /* the pids of the background processes */
@@ -88,6 +89,12 @@ static void RunBuiltInCmd(commandT*);
 static bool IsBuiltIn(char*);
 /* adds a new job to the background jobs*/
 static void AddJobToBg(pid_t); 
+/*Removes jobs with status = "Done" from the background jobs list*/
+static void removeCompletedJobs();
+/*Frees the given job*/
+static void ReleaseJob(bgjobL*);
+/*Prints the pids of all the jobs*/
+static void printJobs();
 /************External Declaration*****************************************/
 
 /**************Implementation***********************************************/
@@ -325,16 +332,18 @@ static void RunBuiltInCmd(commandT* cmd)
   }
   // Execute jobs
   else if (!strcmp(cmd->argv[0], "jobs")){
+    printJobs();
     struct bgjob_l* jobPointer = bgjobs;
     int i = 1;
     if(jobPointer != NULL)
     {
       while(jobPointer != NULL)
       {
-        printf("[%d] pid = %d, fix later to match test case.\n", i, jobPointer->pid);
+        printf("[%d] pid = %d status = %s, fix later to match test case.\n", i, jobPointer->pid, jobPointer->status);
         i++;
         jobPointer = jobPointer->next;
       }
+      removeCompletedJobs();
     }
     else
     {
@@ -384,16 +393,19 @@ void CheckJobs()
       if(WIFEXITED(status))
       {
         fprintf(stdout, "PID %d exited normally\n", jobs->pid);
+        jobs->status = (char*) "Done\0";
       }
       //check if there was an uncaught signal
       else if(WIFSIGNALED(status))
       {
         fprintf(stdout, "PID %d ended because of an uncaught signal\n", jobs->pid);
+        jobs->status = (char*) "Error\0";
       }
       //check if the process was stopped
       else if(WIFSTOPPED(status))
       {
         fprintf(stdout, "PID %d has stopped\n", jobs->pid);
+        jobs->status = (char*) "Stopped\0";
       }
     }
     else if(endid == -1)
@@ -435,7 +447,6 @@ void ReleaseCmdT(commandT **cmd){
 
 /*Adds a job to the background jobs list*/
 void AddJobToBg(pid_t pid){
-  fprintf(stdout, "\nAdding pid %d to background jobs\n", pid);
   //make variables
   bgjobL* last = bgjobs;
   bgjobL* toAdd = (bgjobL*) malloc(sizeof(bgjobL));
@@ -446,6 +457,8 @@ void AddJobToBg(pid_t pid){
   toAdd->pid = pid;
   //set previous to null, will be replaced later if needed
   toAdd->prev = NULL;
+  //set status to running
+  toAdd->status = (char*) "Running\0";
 
   //if bgjobs is empty, set last to the job being added
   if(last == NULL)
@@ -462,5 +475,56 @@ void AddJobToBg(pid_t pid){
     //add the new job to the list
     last->next = toAdd;
     toAdd->prev = last;
+  }
+}
+
+void removeCompletedJobs(){
+  bgjobL* current = bgjobs;
+  bgjobL* prev = NULL;
+  bgjobL* temp = NULL;
+  //while we are not at the end of the list
+  while(current != NULL)
+  {
+    //if status is done
+    if(strcmp(current->status, "Done") == 0)
+    {
+      //if we are at the beginning of the list, 
+      //move the beginning to the next job
+      if(prev == NULL)
+      {
+        bgjobs = current->next;
+      }
+      else
+      {
+        //set the previous job's next pointer to the next job
+        prev->next = current->next;
+        //set the next job's prev pointer to the prev job
+        current->next->prev = prev;
+      }
+      //set the temp pointer to the next job so we have it after we free the current job
+      temp = current->next;
+      //release the current job
+      ReleaseJob(current);
+      //update current to the next job
+      current = temp;
+    }
+    else
+    {
+      //move on to the next job
+      current = current->next;
+    }
+  }
+}
+
+void ReleaseJob(bgjobL* toRelease){
+  free(toRelease);
+}
+
+void printJobs(){
+  bgjobL* jobs = bgjobs;
+  while(jobs != NULL)
+  {
+    fprintf(stdout, "Job with PID: %d\n", jobs->pid);
+    jobs = jobs->next;
   }
 }
