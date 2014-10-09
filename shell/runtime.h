@@ -174,6 +174,9 @@ EXTERN char* getLogin();
  ***********************************************************************/
 EXTERN void CheckJobs();
 
+EXTERN void StopJob();
+
+EXTERN void KillJob();
 /************External Declaration*****************************************/
 
 /**************Definition***************************************************/

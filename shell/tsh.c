@@ -99,5 +99,17 @@ int main (int argc, char *argv[])
 
 static void sig(int signo)
 {
+  //if is a sigint (ctrl + c)
+  if(signo == SIGINT)
+  {
+    //kill foreground job
+    KillJob();
+  }
+  //if is a sigtstp (ctrl + z)
+  else if(signo == SIGTSTP)
+  {
+    //Stop the current foreground job
+    StopJob();
+  }
 }
 

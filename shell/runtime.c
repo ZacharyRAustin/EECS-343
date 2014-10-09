@@ -74,6 +74,9 @@ typedef struct bgjob_l {
 /* the pids of the background processes */
 bgjobL *bgjobs = NULL;
 
+/*foreground pid*/
+pid_t fgpid = -1;
+
 /************Function Prototypes******************************************/
 /* run command */
 static void RunCmdFork(commandT*, bool);
@@ -94,7 +97,10 @@ static void removeCompletedJobs();
 /*Frees the given job*/
 static void ReleaseJob(bgjobL*);
 /*Prints the pids of all the jobs*/
-static void printJobs();
+// static void printJobs();
+/*Wait for the foreground process to finish*/
+static void wait_fg();
+
 /************External Declaration*****************************************/
 
 /**************Implementation***********************************************/
@@ -212,8 +218,6 @@ static bool ResolveExternalCmd(commandT* cmd)
 static void Exec(commandT* cmd, bool forceFork)
 {
   pid_t child_pid;
-  pid_t pid;
-  int status;
   sigset_t mask;
 
   //empty out the masking set
@@ -227,6 +231,7 @@ static void Exec(commandT* cmd, bool forceFork)
 
   //fork the process
   child_pid = fork();
+  fgpid = child_pid;
 
   if(child_pid == 0)
   {
@@ -258,12 +263,7 @@ static void Exec(commandT* cmd, bool forceFork)
       
       //unblock child signals
       sigprocmask(SIG_UNBLOCK, &mask, NULL);
-
-      //wait for child to finish
-      if((pid = wait(&status)) < 0)
-      {
-        fprintf(stdout, "wait");
-      }
+      wait_fg();
     }
 
     //let us know that the parent passed
@@ -290,15 +290,18 @@ static bool IsBuiltIn(char* cmd)
 static void RunBuiltInCmd(commandT* cmd)
 { 
   // Execute cd
-  if(!strcmp(cmd->argv[0],"cd")){
-    if(cmd->argc==1){
+  if(!strcmp(cmd->argv[0],"cd"))
+  {
+    if(cmd->argc==1)
+    {
       int ret = chdir(getenv("HOME"));
       if(ret == -1)
       {
         fprintf(stdout, "Error changing directory with command: %s\n", cmd->cmdline);
       }
     } 
-    else{
+    else
+    {
      int ret = chdir(cmd->argv[1]);
      if(ret == -1)
      {
@@ -307,32 +310,42 @@ static void RunBuiltInCmd(commandT* cmd)
     } 
   }
   // Execute env variable assignments
-  else if (strchr(cmd->argv[0],'=')) {
+  else if (strchr(cmd->argv[0],'=')) 
+  {
     char* var = strtok(cmd->argv[0],"=");
     char* val = strtok(NULL,"=");
     setenv(var,val,1);
   }
   // Execute bg
-  else if (!strcmp(cmd->argv[0], "bg")){
+  else if (strcmp(cmd->argv[0], "bg") == 0)
+  {
     struct bgjob_l* jobPointer = bgjobs;
     if(jobPointer != NULL)
     {
-      if(cmd->argc < 2) // find most recent job
+      // find most recent job
+      if(cmd->argc < 2)
+      { 
         while(jobPointer->next != NULL)
+        {
           jobPointer = jobPointer->next;
-      else{
+        }
+      }
+      else
+      {
         int i;  // find indicated job
         printf("cmd-> argv[1] = %s\n", cmd->argv[1]);
         printf("(int)*cmd->argv[1] = %d\n", (int)*cmd->argv[1]);
         for(i = 1; i < (int)*cmd->argv[1]; i++)
+        {
           jobPointer = jobPointer->next;
+        }
       }
       kill(jobPointer->pid, SIGCONT); // resume job
     }
   }
   // Execute jobs
-  else if (!strcmp(cmd->argv[0], "jobs")){
-    printJobs();
+  else if (strcmp(cmd->argv[0], "jobs") == 0)
+  {
     struct bgjob_l* jobPointer = bgjobs;
     int i = 1;
     if(jobPointer != NULL)
@@ -520,11 +533,39 @@ void ReleaseJob(bgjobL* toRelease){
   free(toRelease);
 }
 
-void printJobs(){
+void StopJob(){
+  if(fgpid > 0)
+  {
+    kill(-fgpid, SIGTSTP);
+    AddJobToBg(fgpid);
+    fgpid = -1;
+    CheckJobs();
+  }
+}
+
+void KillJob(){
+  if(fgpid > 0)
+  {
+    kill(fgpid, SIGINT);
+  }
+}
+
+void wait_fg(){
+  if(fgpid > 0)
+  {
+    int status;
+    while(waitpid(fgpid, &status, WNOHANG|WUNTRACED) == 0)
+    {
+      sleep(1);
+    }
+  }
+}
+
+/*void printJobs(){
   bgjobL* jobs = bgjobs;
   while(jobs != NULL)
   {
     fprintf(stdout, "Job with PID: %d\n", jobs->pid);
     jobs = jobs->next;
   }
-}
+}*/
