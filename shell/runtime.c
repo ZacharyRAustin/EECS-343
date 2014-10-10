@@ -360,6 +360,7 @@ static void RunBuiltInCmd(commandT* cmd)
       if(jobPointer != NULL)
       {
         kill(jobPointer->pid, SIGCONT); // resume job
+        jobPointer->status = "Running\0";
       }
     }
   }
@@ -411,11 +412,23 @@ static void RunBuiltInCmd(commandT* cmd)
           jobPointer = jobPointer->next;
         }
       }
+      if(jobPointer != NULL && strcmp(jobPointer->status, "Running") == 0)
+      {
+        kill(-jobPointer->pid, SIGTSTP);
+      }
       fgpid = jobPointer->pid;
+      // printf("PID is %d", jobPointer->pid);
+      // fflush(stdout);
       kill(jobPointer->pid, SIGCONT);
+      // printf("Sent the SIGCONT\n");
+      // fflush(stdout);
       stopped = 0;
       wait_fg();
+      // printf("Finished waiting for fg\n");
+      // fflush(stdout);
       RemoveJob(fgpid);
+      // printf("Finished Remove Jobe\n");
+      // fflush(stdout);
     }
   }
   else if(strcmp(cmd->argv[0], "SLEEP") == 0)
