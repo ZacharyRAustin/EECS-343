@@ -244,7 +244,8 @@ static void Exec(commandT* cmd, bool forceFork)
   //fork the process
   child_pid = fork();
   fgpid = child_pid;
-
+  // printf("Calling cmd %s\n", cmd->cmdline);
+  // fflush(stdout);
   if(child_pid == 0)
   {
     //child process here
@@ -276,6 +277,7 @@ static void Exec(commandT* cmd, bool forceFork)
       //unblock child signals
       sigprocmask(SIG_UNBLOCK, &mask, NULL);
       stopped = 0;
+      // printf("Calling from exec\n");
       wait_fg();
     }
 
@@ -359,7 +361,7 @@ static void RunBuiltInCmd(commandT* cmd)
       }
       if(jobPointer != NULL)
       {
-        kill(jobPointer->pid, SIGCONT); // resume job
+        kill(-jobPointer->pid, SIGCONT); // resume job
         jobPointer->status = "Running\0";
       }
     }
@@ -389,6 +391,8 @@ static void RunBuiltInCmd(commandT* cmd)
   else if (!strcmp(cmd->argv[0], "fg")){
     struct bgjob_l* jobPointer = bgjobs;
     // tcsetpgrp()???
+    // printf("executing command %s\n", cmd->cmdline);
+    // fflush(stdout);
     if(jobPointer != NULL)
     {
       // find most recent job
@@ -419,7 +423,7 @@ static void RunBuiltInCmd(commandT* cmd)
       fgpid = jobPointer->pid;
       // printf("PID is %d", jobPointer->pid);
       // fflush(stdout);
-      kill(jobPointer->pid, SIGCONT);
+      kill(-jobPointer->pid, SIGCONT);
       // printf("Sent the SIGCONT\n");
       // fflush(stdout);
       stopped = 0;
@@ -451,7 +455,8 @@ void CheckJobs()
     //if 0, the process is still running
     if(endid == 0)
     {
-      // fprintf(stdout, "PID %d still running\n", jobs->pid);
+      // printf("PID %d still running\n", jobs->pid);
+      // fflush(stdout);
     }
     //if it is equal to the job pid, then it has exited
     else if(endid == jobs->pid)
@@ -466,13 +471,15 @@ void CheckJobs()
       //check if there was an uncaught signal
       else if(WIFSIGNALED(status))
       {
-        // fprintf(stdout, "PID %d ended because of an uncaught signal\n", jobs->pid);
+        // printf("PID %d ended because of an uncaught signal\n", jobs->pid);
+        // fflush(stdout);
         jobs->status = (char*) "Error\0";
       }
       //check if the process was stopped
       else if(WIFSTOPPED(status))
       {
-        // fprintf(stdout, "PID %d has stopped\n", jobs->pid);
+        // printf("PID %d has stopped\n", jobs->pid);
+        // fflush(stdout);
         jobs->status = (char*) "Stopped\0";
       }
     }
@@ -617,6 +624,8 @@ void wait_fg(){
   if(fgpid > 0)
   {
     int status;
+    // printf("waiting for pid %d\n", fgpid);
+    // fflush(stdout);
     while(waitpid(fgpid, &status, WNOHANG|WUNTRACED) == 0 && !stopped)
     {
       sleep(0.5);
