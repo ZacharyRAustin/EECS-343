@@ -69,6 +69,8 @@ typedef struct bgjob_l {
   struct bgjob_l* next;
   struct bgjob_l* prev;
   char* status;
+  char* cmdline;
+  int id;
 } bgjobL;
 
 /* the pids of the background processes */
@@ -76,6 +78,12 @@ bgjobL *bgjobs = NULL;
 
 /*foreground pid*/
 pid_t fgpid = -1;
+
+pid_t shell_pid;
+
+char* last_cmd;
+
+int stopped = 0;
 
 /************Function Prototypes******************************************/
 /* run command */
@@ -100,6 +108,10 @@ static void ReleaseJob(bgjobL*);
 // static void printJobs();
 /*Wait for the foreground process to finish*/
 static void wait_fg();
+/*Marks the job with the given PID as stopped*/
+static void MarkJobAsStopped(pid_t);
+/*Removes the job with the given pid from the bgjobs list*/
+static void RemoveJob(pid_t);
 
 /************External Declaration*****************************************/
 
@@ -250,7 +262,7 @@ static void Exec(commandT* cmd, bool forceFork)
   else if(child_pid > 0)
   {
     //parent process here
-
+    last_cmd = cmd->cmdline;
     if(cmd->bg)
     {
       //add to bg jobs
@@ -263,6 +275,7 @@ static void Exec(commandT* cmd, bool forceFork)
       
       //unblock child signals
       sigprocmask(SIG_UNBLOCK, &mask, NULL);
+      stopped = 0;
       wait_fg();
     }
 
@@ -297,7 +310,7 @@ static void RunBuiltInCmd(commandT* cmd)
       int ret = chdir(getenv("HOME"));
       if(ret == -1)
       {
-        fprintf(stdout, "Error changing directory with command: %s\n", cmd->cmdline);
+        // fprintf(stdout, "Error changing directory with command: %s\n", cmd->cmdline);
       }
     } 
     else
@@ -305,7 +318,7 @@ static void RunBuiltInCmd(commandT* cmd)
      int ret = chdir(cmd->argv[1]);
      if(ret == -1)
      {
-      fprintf(stdout, "Error changing directory with command: %s\n", cmd->cmdline);
+      // fprintf(stdout, "Error changing directory with command: %s\n", cmd->cmdline);
      }
     } 
   }
@@ -352,7 +365,8 @@ static void RunBuiltInCmd(commandT* cmd)
     {
       while(jobPointer != NULL)
       {
-        printf("[%d] pid = %d status = %s, fix later to match test case.\n", i, jobPointer->pid, jobPointer->status);
+        printf("[%d] %-24s%s%s\n", jobPointer->id, jobPointer->status, jobPointer->cmdline, strcmp(jobPointer->status, "Running") == 0 ?  "&" : "");
+        fflush(stdout);
         i++;
         jobPointer = jobPointer->next;
       }
@@ -360,7 +374,7 @@ static void RunBuiltInCmd(commandT* cmd)
     }
     else
     {
-      fprintf(stdout, "jobPointer is null\n");
+      // fprintf(stdout, "jobPointer is null\n");
     }
   }
   // Execute fg
@@ -369,16 +383,27 @@ static void RunBuiltInCmd(commandT* cmd)
     // tcsetpgrp()???
     if(jobPointer != NULL)
     {
-      if(cmd->argc < 2) // find most recent job
+      // find most recent job
+      if(cmd->argc < 2) 
+      {
         while(jobPointer->next != NULL)
+        {
           jobPointer = jobPointer->next;
-      else{ // find indicated job
+        }
+      }
+      else
+      { // find indicated job
         int i;
         for(i = 1; i < (int)*cmd->argv[1]; i++)
+        {
           jobPointer = jobPointer->next;
+        }
       }
-      // How to bring it to foreground??
-      kill(jobPointer->pid, SIGCONT); // resume job
+      fgpid = jobPointer->pid;
+      kill(jobPointer->pid, SIGCONT);
+      stopped = 0;
+      wait_fg();
+      RemoveJob(fgpid);
     }
   } 
 }
@@ -388,7 +413,6 @@ void CheckJobs()
   bgjobL* jobs = bgjobs;
   pid_t endid;
   int status;
-
   while(jobs != NULL)
   {
     //get the endid for the current job
@@ -397,7 +421,7 @@ void CheckJobs()
     //if 0, the process is still running
     if(endid == 0)
     {
-      fprintf(stdout, "PID %d still running\n", jobs->pid);
+      // fprintf(stdout, "PID %d still running\n", jobs->pid);
     }
     //if it is equal to the job pid, then it has exited
     else if(endid == jobs->pid)
@@ -405,29 +429,32 @@ void CheckJobs()
       //check if it exited normally
       if(WIFEXITED(status))
       {
-        fprintf(stdout, "PID %d exited normally\n", jobs->pid);
+        printf("[%d] %-24s%s\n", jobs->id, "Done", jobs->cmdline);
+        fflush(stdout);
         jobs->status = (char*) "Done\0";
       }
       //check if there was an uncaught signal
       else if(WIFSIGNALED(status))
       {
-        fprintf(stdout, "PID %d ended because of an uncaught signal\n", jobs->pid);
+        // fprintf(stdout, "PID %d ended because of an uncaught signal\n", jobs->pid);
         jobs->status = (char*) "Error\0";
       }
       //check if the process was stopped
       else if(WIFSTOPPED(status))
       {
-        fprintf(stdout, "PID %d has stopped\n", jobs->pid);
+        // fprintf(stdout, "PID %d has stopped\n", jobs->pid);
         jobs->status = (char*) "Stopped\0";
       }
     }
     else if(endid == -1)
     {
-      fprintf(stdout, "Error calling waitpid for job pid %d\n", jobs->pid);
+      // fprintf(stdout, "Error calling waitpid for job pid %d\n", jobs->pid);
     }
 
     jobs = jobs->next; 
   }
+
+  removeCompletedJobs();
   
 }
 
@@ -472,10 +499,13 @@ void AddJobToBg(pid_t pid){
   toAdd->prev = NULL;
   //set status to running
   toAdd->status = (char*) "Running\0";
+  //set the cmdline of the new job
+  toAdd->cmdline = last_cmd;
 
   //if bgjobs is empty, set last to the job being added
   if(last == NULL)
   {
+    toAdd->id = 1;
     bgjobs = toAdd;
   }
   else
@@ -488,6 +518,7 @@ void AddJobToBg(pid_t pid){
     //add the new job to the list
     last->next = toAdd;
     toAdd->prev = last;
+    toAdd->id = last->id + 1;
   }
 }
 
@@ -537,7 +568,9 @@ void StopJob(){
   if(fgpid > 0)
   {
     kill(-fgpid, SIGTSTP);
+    stopped = 1;
     AddJobToBg(fgpid);
+    MarkJobAsStopped(fgpid);
     fgpid = -1;
     CheckJobs();
   }
@@ -554,9 +587,61 @@ void wait_fg(){
   if(fgpid > 0)
   {
     int status;
-    while(waitpid(fgpid, &status, WNOHANG|WUNTRACED) == 0)
+    while(waitpid(fgpid, &status, WNOHANG|WUNTRACED) == 0 && !stopped)
     {
-      sleep(1);
+      sleep(0.5);
+    }
+
+    if(stopped)
+    {
+      fgpid = -1;
+    }
+  }
+}
+
+void MarkJobAsStopped(pid){
+  bgjobL* job = bgjobs;
+  while(job != NULL)
+  {
+    if(job->pid == pid)
+    {
+      job->status = "Stopped\0";
+      break;
+    }
+    job = job->next;
+  }
+}
+
+void SetShellPID(pid){
+  shell_pid = pid;
+}
+
+void RemoveJob(pid){
+  bgjobL* job = bgjobs;
+  if(job != NULL)
+  {
+    while(job != NULL)
+    {
+      if(job->pid == pid)
+      {
+        if(job->prev == NULL && job->next == NULL)
+        {
+          bgjobs = NULL;
+        }
+        else
+        {
+          if(job->prev != NULL)
+          {
+            job->prev->next = job->next;
+          }
+          if(job->next != NULL)
+          {
+            job->next->prev = job->prev;
+          }
+        }
+        ReleaseJob(job);
+        break;
+      }
     }
   }
 }

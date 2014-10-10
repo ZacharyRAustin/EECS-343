@@ -36,6 +36,8 @@
 #include <signal.h>
 #include <string.h>
 #include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 /************Private include**********************************************/
 #include "tsh.h"
@@ -70,6 +72,8 @@ int main (int argc, char *argv[])
   /* shell initialization */
   if (signal(SIGINT, sig) == SIG_ERR) PrintPError("SIGINT");
   if (signal(SIGTSTP, sig) == SIG_ERR) PrintPError("SIGTSTP");
+
+  SetShellPID(getpid());
 
   while (!forceExit) /* repeat forever */
   {

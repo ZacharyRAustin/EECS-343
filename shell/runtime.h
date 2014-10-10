@@ -177,6 +177,8 @@ EXTERN void CheckJobs();
 EXTERN void StopJob();
 
 EXTERN void KillJob();
+
+EXTERN void SetShellPID(pid_t);
 /************External Declaration*****************************************/
 
 /**************Definition***************************************************/
