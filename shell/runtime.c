@@ -296,7 +296,8 @@ static bool IsBuiltIn(char* cmd)
   return strcmp(cmd, "fg") == 0 
       || strcmp(cmd, "bg") == 0
       || strcmp(cmd, "jobs") == 0
-      || strcmp(cmd, "cd") == 0;   
+      || strcmp(cmd, "cd") == 0;
+      // || strcmp(cmd, "SLEEP") == 0;   
 }
 
 
@@ -345,15 +346,21 @@ static void RunBuiltInCmd(commandT* cmd)
       }
       else
       {
-        int i;  // find indicated job
-        printf("cmd-> argv[1] = %s\n", cmd->argv[1]);
-        printf("(int)*cmd->argv[1] = %d\n", (int)*cmd->argv[1]);
-        for(i = 1; i < (int)*cmd->argv[1]; i++)
+        int job_num = atoi(cmd->argv[1]);
+
+        while(jobPointer != NULL)
         {
+          if(jobPointer->id == job_num)
+          {
+            break;
+          }
           jobPointer = jobPointer->next;
         }
       }
-      kill(jobPointer->pid, SIGCONT); // resume job
+      if(jobPointer != NULL)
+      {
+        kill(jobPointer->pid, SIGCONT); // resume job
+      }
     }
   }
   // Execute jobs
@@ -393,9 +400,14 @@ static void RunBuiltInCmd(commandT* cmd)
       }
       else
       { // find indicated job
-        int i;
-        for(i = 1; i < (int)*cmd->argv[1]; i++)
+        int job_num = atoi(cmd->argv[1]);
+        fflush(stdout);
+        while(jobPointer != NULL)
         {
+          if(jobPointer->id == job_num)
+          {
+            break;
+          }
           jobPointer = jobPointer->next;
         }
       }
@@ -405,6 +417,11 @@ static void RunBuiltInCmd(commandT* cmd)
       wait_fg();
       RemoveJob(fgpid);
     }
+  }
+  else if(strcmp(cmd->argv[0], "SLEEP") == 0)
+  {
+    cmd->argv[0] = "sleep";
+    RunCmdFork(cmd, TRUE);
   } 
 }
 
