@@ -659,6 +659,7 @@ void RemoveJob(pid){
         ReleaseJob(job);
         break;
       }
+      job = job->next;
     }
   }
 }
