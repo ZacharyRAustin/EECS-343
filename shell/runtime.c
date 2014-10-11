@@ -653,13 +653,13 @@ void wait_fg(){
     // fflush(stdout);
     while(waitpid(fgpid, &status, WNOHANG|WUNTRACED) == 0 && !stopped)
     {
-      // sleep(0.5);
+      sleep(0.5);
     }
 
-    if(stopped)
-    {
+    // if(stopped)
+    // {
       fgpid = -1;
-    }
+    // }
   }
 }
 

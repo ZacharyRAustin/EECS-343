@@ -174,11 +174,26 @@ EXTERN char* getLogin();
  ***********************************************************************/
 EXTERN void CheckJobs();
 
+/***********************************************************************
+ *  Title: Stop the current job
+ * ---------------------------------------------------------------------
+ *    Purpose: Send a SIGTSTP to the job in the foreground
+ *    Input: void
+ *    Output: void 
+ ***********************************************************************/
 EXTERN void StopJob();
 
+/***********************************************************************
+ *  Title: Kill the current job
+ * ---------------------------------------------------------------------
+ *    Purpose: Send a SIGINT to the job in the foreground
+ *    Input: void
+ *    Output: void 
+ ***********************************************************************/
 EXTERN void KillJob();
 
-EXTERN void SetShellPID(pid_t);
+EXTERN void setShellPID(pid_t);
+
 /************External Declaration*****************************************/
 
 /**************Definition***************************************************/
