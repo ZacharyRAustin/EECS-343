@@ -1,0 +1,35 @@
+TSH(1)                     User Manuals                    TSH(1)
+
+
+
+NAME
+     tsh - A tiny shell
+
+DESCRIPTION
+     tsh  This tiny shell allows a user to background and foregro
+     und jobs, pipe output, and redirect jobs' standard input/out
+     put.
+
+INSTRUCTIONS
+     ls       list directory contents
+
+     ctrl-c   should cause a SIGINT signal to be sent to the curr
+              ent process, as well as any descendants of that pro
+              cess
+
+     ctrl-z   should cause a SIGTSTP signal to be sent to the cur
+              rent foreground job, as well as any descendants of 
+              that job
+
+     exit     at a prompt should cause your shell to cleanly term
+              inate
+
+BUGS
+     The command name should have been chosen more  carefully  to
+     reflect its purpose.
+
+AUTHOR
+     Zachary Austin + Yifan Guo
+
+Linux              Last change: OCTOBER 2014                    2
+
