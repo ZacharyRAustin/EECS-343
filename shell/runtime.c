@@ -102,8 +102,6 @@ static void AddJobToBg(pid_t, int);
 static void removeCompletedJobs();
 /*Frees the given job*/
 static void ReleaseJob(bgjobL*);
-/*Prints the pids of all the jobs*/
-// static void printJobs();
 /*Wait for the foreground process to finish*/
 static void wait_fg();
 /*Removes the job with the given pid from the bgjobs list*/
