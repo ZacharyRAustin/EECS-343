@@ -523,7 +523,7 @@ void ReleaseCmdT(commandT **cmd){
 }
 
 /*Adds a job to the background jobs list*/
-void AddJobToBg(pid_t pid, int addtofront){
+void AddJobToBg(pid_t pid, int stopped){
   //make variables
   bgjobL* last = bgjobs;
   bgjobL* toAdd = (bgjobL*) malloc(sizeof(bgjobL));
@@ -537,7 +537,7 @@ void AddJobToBg(pid_t pid, int addtofront){
   //set status to running
   toAdd->status = (char*) "Running\0";
   //unless we are getting it from ctrl+z
-  if(addtofront)
+  if(stopped)
   {
     toAdd->status = (char*) "Stopped\0";
   }
@@ -549,13 +549,9 @@ void AddJobToBg(pid_t pid, int addtofront){
   {
     toAdd->id = 1;
     bgjobs = toAdd;
-    if(addtofront)
-    {
-      printf("[%d] %-24s%s\n", bgjobs->id, bgjobs->status, bgjobs->cmdline);
-      fflush(stdout);
-    }
+    
   }
-  else if(addtofront)
+  /*else if(stopped)
   {
     bgjobs->prev = toAdd;
     toAdd->next = bgjobs;
@@ -567,7 +563,7 @@ void AddJobToBg(pid_t pid, int addtofront){
     bgjobs->id = last->id + 1;
     printf("[%d] %-24s%s\n", bgjobs->id, bgjobs->status, bgjobs->cmdline);
     fflush(stdout);
-  }
+  }*/
   else
   {
     //find the last job -- the one whose next is null
@@ -579,6 +575,12 @@ void AddJobToBg(pid_t pid, int addtofront){
     last->next = toAdd;
     toAdd->prev = last;
     toAdd->id = last->id + 1;
+  }
+
+  if(stopped)
+  {
+    printf("[%d] %-24s%s\n", toAdd->id, toAdd->status, toAdd->cmdline);
+    fflush(stdout);
   }
 }
 
@@ -651,7 +653,7 @@ void wait_fg(){
     // fflush(stdout);
     while(waitpid(fgpid, &status, WNOHANG|WUNTRACED) == 0 && !stopped)
     {
-      sleep(0.5);
+      // sleep(0.5);
     }
 
     if(stopped)
