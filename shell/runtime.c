@@ -99,7 +99,7 @@ static void RunBuiltInCmd(commandT*);
 /* checks whether a command is a builtin command */
 static bool IsBuiltIn(char*);
 /* adds a new job to the background jobs*/
-static void AddJobToBg(pid_t); 
+static void AddJobToBg(pid_t, int); 
 /*Removes jobs with status = "Done" from the background jobs list*/
 static void removeCompletedJobs();
 /*Frees the given job*/
@@ -267,7 +267,7 @@ static void Exec(commandT* cmd, bool forceFork)
     if(cmd->bg)
     {
       //add to bg jobs
-      AddJobToBg(child_pid);
+      AddJobToBg(child_pid, 0);
       //unblock child signals
       sigprocmask(SIG_UNBLOCK, &mask, NULL);
     }
@@ -375,7 +375,7 @@ static void RunBuiltInCmd(commandT* cmd)
     {
       while(jobPointer != NULL)
       {
-        printf("[%d] %-24s%s%s\n", jobPointer->id, jobPointer->status, jobPointer->cmdline, strcmp(jobPointer->status, "Running") == 0 ?  "&" : "");
+        printf("[%d] %-24s%s%s\n", jobPointer->id, jobPointer->status, jobPointer->cmdline, strcmp(jobPointer->status, "Running") == 0 ?  " &" : "");
         fflush(stdout);
         i++;
         jobPointer = jobPointer->next;
@@ -427,10 +427,10 @@ static void RunBuiltInCmd(commandT* cmd)
       // printf("Sent the SIGCONT\n");
       // fflush(stdout);
       stopped = 0;
+      RemoveJob(fgpid);
       wait_fg();
       // printf("Finished waiting for fg\n");
       // fflush(stdout);
-      RemoveJob(fgpid);
       // printf("Finished Remove Jobe\n");
       // fflush(stdout);
     }
@@ -523,7 +523,7 @@ void ReleaseCmdT(commandT **cmd){
 }
 
 /*Adds a job to the background jobs list*/
-void AddJobToBg(pid_t pid){
+void AddJobToBg(pid_t pid, int addtofront){
   //make variables
   bgjobL* last = bgjobs;
   bgjobL* toAdd = (bgjobL*) malloc(sizeof(bgjobL));
@@ -536,6 +536,11 @@ void AddJobToBg(pid_t pid){
   toAdd->prev = NULL;
   //set status to running
   toAdd->status = (char*) "Running\0";
+  //unless we are getting it from ctrl+z
+  if(addtofront)
+  {
+    toAdd->status = (char*) "Stopped\0";
+  }
   //set the cmdline of the new job
   toAdd->cmdline = last_cmd;
 
@@ -544,6 +549,24 @@ void AddJobToBg(pid_t pid){
   {
     toAdd->id = 1;
     bgjobs = toAdd;
+    if(addtofront)
+    {
+      printf("[%d] %-24s%s\n", bgjobs->id, bgjobs->status, bgjobs->cmdline);
+      fflush(stdout);
+    }
+  }
+  else if(addtofront)
+  {
+    bgjobs->prev = toAdd;
+    toAdd->next = bgjobs;
+    bgjobs = toAdd;
+    while(last->next != NULL)
+    {
+      last = last->next;
+    }
+    bgjobs->id = last->id + 1;
+    printf("[%d] %-24s%s\n", bgjobs->id, bgjobs->status, bgjobs->cmdline);
+    fflush(stdout);
   }
   else
   {
@@ -606,7 +629,7 @@ void StopJob(){
   {
     kill(-fgpid, SIGTSTP);
     stopped = 1;
-    AddJobToBg(fgpid);
+    AddJobToBg(fgpid, 1);
     MarkJobAsStopped(fgpid);
     fgpid = -1;
     CheckJobs();
