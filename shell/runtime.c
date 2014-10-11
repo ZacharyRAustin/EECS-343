@@ -106,8 +106,6 @@ static void ReleaseJob(bgjobL*);
 // static void printJobs();
 /*Wait for the foreground process to finish*/
 static void wait_fg();
-/*Marks the job with the given PID as stopped*/
-static void MarkJobAsStopped(pid_t);
 /*Removes the job with the given pid from the bgjobs list*/
 static void RemoveJob(pid_t);
 
@@ -600,7 +598,6 @@ void StopJob(){
     kill(-fgpid, SIGTSTP);
     stopped = 1;
     AddJobToBg(fgpid, 1);
-    MarkJobAsStopped(fgpid);
     fgpid = -1;
     CheckJobs();
   }
@@ -627,19 +624,6 @@ void wait_fg(){
     }
     //set no foreground job when finished
     fgpid = -1;
-  }
-}
-
-void MarkJobAsStopped(pid){
-  bgjobL* job = bgjobs;
-  while(job != NULL)
-  {
-    if(job->pid == pid)
-    {
-      job->status = "Stopped\0";
-      break;
-    }
-    job = job->next;
   }
 }
 
