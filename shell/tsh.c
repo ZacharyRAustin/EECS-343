@@ -72,13 +72,11 @@ int main (int argc, char *argv[])
   /* shell initialization */
   if (signal(SIGINT, sig) == SIG_ERR) PrintPError("SIGINT");
   if (signal(SIGTSTP, sig) == SIG_ERR) PrintPError("SIGTSTP");
-
-  SetShellPID(getpid());
+  if (signal(SIGCHLD, sig) == SIG_ERR) PrintPError("SIGCHLD");
 
   while (!forceExit) /* repeat forever */
   {
     /* read command line */
-    fprintf(stdout, "tsh>");
     getCommandLine(&cmdLine, BUFSIZE);
 
     if(strcmp(cmdLine, "exit") == 0)

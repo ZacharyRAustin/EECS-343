@@ -79,8 +79,6 @@ bgjobL *bgjobs = NULL;
 /*foreground pid*/
 pid_t fgpid = -1;
 
-pid_t shell_pid;
-
 char* last_cmd;
 
 int stopped = 0;
@@ -119,11 +117,8 @@ static void RemoveJob(pid_t);
 int total_task;
 void RunCmd(commandT** cmd, int n)
 {
-  // printf("in RunCmd\n");
   int i;
   total_task = n;
-  // fprintf(stdout, "Name: %s\n", cmd[0]->name);
-  // fprintf(stdout, "cmdLine: %s\n", cmd[0]->cmdline);
   
   if(n == 1)
     RunCmdFork(cmd[0], TRUE);
@@ -151,7 +146,6 @@ void RunCmdFork(commandT* cmd, bool fork)
 
 void RunCmdBg(commandT* cmd)
 {
-  // printf("in RunCmdBg\n");
   RunCmdFork(cmd, FALSE);// TODO
 }
 
@@ -243,9 +237,7 @@ static void Exec(commandT* cmd, bool forceFork)
 
   //fork the process
   child_pid = fork();
-  fgpid = child_pid;
-  // printf("Calling cmd %s\n", cmd->cmdline);
-  // fflush(stdout);
+  
   if(child_pid == 0)
   {
     //child process here
@@ -263,7 +255,10 @@ static void Exec(commandT* cmd, bool forceFork)
   else if(child_pid > 0)
   {
     //parent process here
+
+    //set last_cmd so we know the last command entered
     last_cmd = cmd->cmdline;
+    //if it is a background job
     if(cmd->bg)
     {
       //add to bg jobs
@@ -273,33 +268,30 @@ static void Exec(commandT* cmd, bool forceFork)
     }
     else
     {
-      
+      //set foreground pid to the child pid
+      fgpid = child_pid;
       //unblock child signals
       sigprocmask(SIG_UNBLOCK, &mask, NULL);
+      //reset stopped so we can loop
       stopped = 0;
-      // printf("Calling from exec\n");
+      //wait for the foreground process to finish
       wait_fg();
     }
-
-    //let us know that the parent passed
-    // fprintf(stdout, "Parent passed command: %s\n", cmd->cmdline);
   }
   else
   {
+    //let us know that the fork failed
     fprintf(stdout, "Fork failed for command: %s\n", cmd->cmdline);
   }
 }
 
 static bool IsBuiltIn(char* cmd)
 {
-  //Print out to let us know where we are
-  // fprintf(stdout, "In IsBuiltIn with command %s\n", cmd);
-  //check for built in commands fg, bg, or jobs
+  //check for fg, bg, jobs, and cd as builtin commands
   return strcmp(cmd, "fg") == 0 
       || strcmp(cmd, "bg") == 0
       || strcmp(cmd, "jobs") == 0
-      || strcmp(cmd, "cd") == 0;
-      // || strcmp(cmd, "SLEEP") == 0;   
+      || strcmp(cmd, "cd") == 0;   
 }
 
 
@@ -308,39 +300,38 @@ static void RunBuiltInCmd(commandT* cmd)
   // Execute cd
   if(!strcmp(cmd->argv[0],"cd"))
   {
+    //if just cd
     if(cmd->argc==1)
     {
+      //go HOME
       int ret = chdir(getenv("HOME"));
+      //need this if for compiler warnings about ret even thought we don't do anything
       if(ret == -1)
       {
-        // fprintf(stdout, "Error changing directory with command: %s\n", cmd->cmdline);
       }
     } 
     else
     {
-     int ret = chdir(cmd->argv[1]);
-     if(ret == -1)
-     {
-      // fprintf(stdout, "Error changing directory with command: %s\n", cmd->cmdline);
-     }
+      //try to go where it tells us
+      int ret = chdir(cmd->argv[1]);
+      //need this if for compiler warnings about ret even thought we don't do anything
+      if(ret == -1)
+      {
+      }
     } 
-  }
-  // Execute env variable assignments
-  else if (strchr(cmd->argv[0],'=')) 
-  {
-    char* var = strtok(cmd->argv[0],"=");
-    char* val = strtok(NULL,"=");
-    setenv(var,val,1);
   }
   // Execute bg
   else if (strcmp(cmd->argv[0], "bg") == 0)
   {
+    //get job list
     struct bgjob_l* jobPointer = bgjobs;
+    //if we have a list
     if(jobPointer != NULL)
     {
-      // find most recent job
+      // if no specific job given
       if(cmd->argc < 2)
       { 
+        //find most recent
         while(jobPointer->next != NULL)
         {
           jobPointer = jobPointer->next;
@@ -348,8 +339,10 @@ static void RunBuiltInCmd(commandT* cmd)
       }
       else
       {
+        //get job id
         int job_num = atoi(cmd->argv[1]);
 
+        //try to find the id
         while(jobPointer != NULL)
         {
           if(jobPointer->id == job_num)
@@ -359,9 +352,12 @@ static void RunBuiltInCmd(commandT* cmd)
           jobPointer = jobPointer->next;
         }
       }
+      //if we found it
       if(jobPointer != NULL)
       {
-        kill(-jobPointer->pid, SIGCONT); // resume job
+        //send it a SIGCONT signal
+        kill(-jobPointer->pid, SIGCONT);
+        //set status to running
         jobPointer->status = "Running\0";
       }
     }
@@ -369,77 +365,69 @@ static void RunBuiltInCmd(commandT* cmd)
   // Execute jobs
   else if (strcmp(cmd->argv[0], "jobs") == 0)
   {
+    //get job list
     struct bgjob_l* jobPointer = bgjobs;
-    int i = 1;
+    //if there is a job list, go through it
     if(jobPointer != NULL)
     {
+      //while we have a job
       while(jobPointer != NULL)
       {
+        //print out status
         printf("[%d] %-24s%s%s\n", jobPointer->id, jobPointer->status, jobPointer->cmdline, strcmp(jobPointer->status, "Running") == 0 ?  " &" : "");
         fflush(stdout);
-        i++;
+        //move to next job
         jobPointer = jobPointer->next;
       }
+      //if any jobs are complete, remove them
       removeCompletedJobs();
-    }
-    else
-    {
-      // fprintf(stdout, "jobPointer is null\n");
     }
   }
   // Execute fg
-  else if (!strcmp(cmd->argv[0], "fg")){
-    struct bgjob_l* jobPointer = bgjobs;
-    // tcsetpgrp()???
-    // printf("executing command %s\n", cmd->cmdline);
-    // fflush(stdout);
-    if(jobPointer != NULL)
+  else if (strcmp(cmd->argv[0], "fg") == 0){
+    struct bgjob_l* job = bgjobs;
+    //if we have background jobs
+    if(job != NULL)
     {
-      // find most recent job
+      // if just fg
       if(cmd->argc < 2) 
       {
-        while(jobPointer->next != NULL)
+        //find most recent job
+        while(job->next != NULL)
         {
-          jobPointer = jobPointer->next;
+          job = job->next;
         }
       }
       else
-      { // find indicated job
+      { // get job number to get
         int job_num = atoi(cmd->argv[1]);
-        fflush(stdout);
-        while(jobPointer != NULL)
+        //find given job if it exists
+        while(job != NULL)
         {
-          if(jobPointer->id == job_num)
+          if(job->id == job_num)
           {
             break;
           }
-          jobPointer = jobPointer->next;
+          job = job->next;
         }
       }
-      if(jobPointer != NULL && strcmp(jobPointer->status, "Running") == 0)
+      //if the job is running, stop it
+      if(job != NULL && strcmp(job->status, "Running") == 0)
       {
-        kill(-jobPointer->pid, SIGTSTP);
+        kill(-job->pid, SIGTSTP);
       }
-      fgpid = jobPointer->pid;
-      // printf("PID is %d", jobPointer->pid);
-      // fflush(stdout);
-      kill(-jobPointer->pid, SIGCONT);
-      // printf("Sent the SIGCONT\n");
-      // fflush(stdout);
+      //update foreground pid to equal the selected job's pid
+      fgpid = job->pid;
+      //continue the job
+      kill(-job->pid, SIGCONT);
+      //reset stopped value so we can loop
       stopped = 0;
+      //remove the job from the background jobs list
       RemoveJob(fgpid);
+      //wait for the new foreground job to finish
       wait_fg();
-      // printf("Finished waiting for fg\n");
-      // fflush(stdout);
-      // printf("Finished Remove Jobe\n");
-      // fflush(stdout);
     }
   }
-  else if(strcmp(cmd->argv[0], "SLEEP") == 0)
-  {
-    cmd->argv[0] = "sleep";
-    RunCmdFork(cmd, TRUE);
-  } 
 }
 
 void CheckJobs()
@@ -452,45 +440,35 @@ void CheckJobs()
     //get the endid for the current job
     endid = waitpid(jobs->pid, &status, WNOHANG|WUNTRACED);
 
-    //if 0, the process is still running
-    if(endid == 0)
-    {
-      // printf("PID %d still running\n", jobs->pid);
-      // fflush(stdout);
-    }
     //if it is equal to the job pid, then it has exited
-    else if(endid == jobs->pid)
+    if(endid == jobs->pid)
     {
       //check if it exited normally
       if(WIFEXITED(status))
       {
+        //if it has, print out id, status, and cmd line
         printf("[%d] %-24s%s\n", jobs->id, "Done", jobs->cmdline);
         fflush(stdout);
+        //set status to done
         jobs->status = (char*) "Done\0";
       }
       //check if there was an uncaught signal
       else if(WIFSIGNALED(status))
       {
-        // printf("PID %d ended because of an uncaught signal\n", jobs->pid);
-        // fflush(stdout);
+        //set status to error
         jobs->status = (char*) "Error\0";
       }
       //check if the process was stopped
       else if(WIFSTOPPED(status))
       {
-        // printf("PID %d has stopped\n", jobs->pid);
-        // fflush(stdout);
+        //set status to stopped
         jobs->status = (char*) "Stopped\0";
       }
     }
-    else if(endid == -1)
-    {
-      // fprintf(stdout, "Error calling waitpid for job pid %d\n", jobs->pid);
-    }
-
+    //move on to next job
     jobs = jobs->next; 
   }
-
+  //remove all completed jobs since they have been displayed
   removeCompletedJobs();
   
 }
@@ -551,19 +529,6 @@ void AddJobToBg(pid_t pid, int stopped){
     bgjobs = toAdd;
     
   }
-  /*else if(stopped)
-  {
-    bgjobs->prev = toAdd;
-    toAdd->next = bgjobs;
-    bgjobs = toAdd;
-    while(last->next != NULL)
-    {
-      last = last->next;
-    }
-    bgjobs->id = last->id + 1;
-    printf("[%d] %-24s%s\n", bgjobs->id, bgjobs->status, bgjobs->cmdline);
-    fflush(stdout);
-  }*/
   else
   {
     //find the last job -- the one whose next is null
@@ -573,12 +538,15 @@ void AddJobToBg(pid_t pid, int stopped){
     }
     //add the new job to the list
     last->next = toAdd;
+    //set the new job to point correctly to the previous job
     toAdd->prev = last;
+    //set the new job's id correctly
     toAdd->id = last->id + 1;
   }
-
+  //if it was stopped by ctrl+z
   if(stopped)
   {
+    //print out id, status, and cmdline 
     printf("[%d] %-24s%s\n", toAdd->id, toAdd->status, toAdd->cmdline);
     fflush(stdout);
   }
@@ -639,8 +607,10 @@ void StopJob(){
 }
 
 void KillJob(){
+  //if we have a valid foreground job
   if(fgpid > 0)
   {
+    //send it a SIGINT
     kill(fgpid, SIGINT);
   }
 }
@@ -649,17 +619,14 @@ void wait_fg(){
   if(fgpid > 0)
   {
     int status;
-    // printf("waiting for pid %d\n", fgpid);
-    // fflush(stdout);
+    //wait for the foreground job to finish
     while(waitpid(fgpid, &status, WNOHANG|WUNTRACED) == 0 && !stopped)
     {
+      //sleep when not finished yet
       sleep(0.5);
     }
-
-    // if(stopped)
-    // {
-      fgpid = -1;
-    // }
+    //set no foreground job when finished
+    fgpid = -1;
   }
 }
 
@@ -676,46 +643,43 @@ void MarkJobAsStopped(pid){
   }
 }
 
-void SetShellPID(pid){
-  shell_pid = pid;
-}
-
+//Remove the given job from the background jobs list
 void RemoveJob(pid){
+  //get the list
   bgjobL* job = bgjobs;
-  if(job != NULL)
+  //while it isn't null
+  while(job != NULL)
   {
-    while(job != NULL)
+    //if this is our job
+    if(job->pid == pid)
     {
-      if(job->pid == pid)
+      //if this is the only job in the background jobs list
+      if(job->prev == NULL && job->next == NULL)
       {
-        if(job->prev == NULL && job->next == NULL)
-        {
-          bgjobs = NULL;
-        }
-        else
-        {
-          if(job->prev != NULL)
-          {
-            job->prev->next = job->next;
-          }
-          if(job->next != NULL)
-          {
-            job->next->prev = job->prev;
-          }
-        }
-        ReleaseJob(job);
-        break;
+        //set the list pointer to null
+        bgjobs = NULL;
       }
-      job = job->next;
+      else
+      {
+        //if is isn't the first element
+        if(job->prev != NULL)
+        {
+          //set the previous job's next pointer to the current job's next pointer
+          job->prev->next = job->next;
+        }
+        //if it isn't the last element
+        if(job->next != NULL)
+        {
+          //set the next job's prev pointer to the current job's prev pointer
+          job->next->prev = job->prev;
+        }
+      }
+      //release the job
+      ReleaseJob(job);
+      //stop the loop
+      break;
     }
+    //move to the next job
+    job = job->next;
   }
 }
-
-/*void printJobs(){
-  bgjobL* jobs = bgjobs;
-  while(jobs != NULL)
-  {
-    fprintf(stdout, "Job with PID: %d\n", jobs->pid);
-    jobs = jobs->next;
-  }
-}*/
